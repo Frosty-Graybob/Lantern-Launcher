@@ -387,9 +387,5 @@ installer, and the entry in Windows' "Apps" list, are not touched.
   once before your first build — see `client/tools/README.txt`. A future
   Windows update to innoextract's official release may fix the underlying
   bug, at which point this MSYS2-sourcing step could be simplified away.
-"# Lantern-Launcher" 
-"# Lantern-Launcher" 
-"# Lantern-Launcher" 
-"# Lantern-Launcher" 
-"# Lantern-Launcher" 
+
 If you would like to support me and what I do please consider donating to my Ko-Fi: https://ko-fi.com/frostygraybob 
