@@ -392,3 +392,4 @@ installer, and the entry in Windows' "Apps" list, are not touched.
 "# Lantern-Launcher" 
 "# Lantern-Launcher" 
 "# Lantern-Launcher" 
+If you would like to support me and what I do please consider donating to my Ko-Fi: https://ko-fi.com/frostygraybob 
