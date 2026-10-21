@@ -1,317 +1,238 @@
-# Game Launcher — self-hosted Steam replacement
+# Game Launcher
 
-- **`server/`** — serves your game library over your network. Runs as a **Windows app**
-  (no setup, lives in the system tray), as a **Docker container** (TrueNAS, Unraid,
-  Synology, any Docker host), or straight from Node. One shared code base underneath.
-- **`client/`** — Windows desktop app (Electron). Downloads installers, silently
-  runs GOG offline installers, detects where the game landed, and gives you
-  a Play button.
+A self-hosted replacement for Steam's library and installer flow. Put your game installers on one machine, and every PC on your network gets a clean library with covers, descriptions, one-click installs and a Play button.
 
-## Server
+- **Server** (`server/`): shares a folder of games over your network. Run it as a Windows app, a Docker container, or straight from Node.
+- **Client** (`client/`): a Windows desktop app. It downloads a game, installs it for you, finds the program to start, and gives you a Play button.
 
-Pick whichever fits where your games live. They all serve the same way, and the
-launcher can't tell them apart.
+The server only ever reads your games folder. It never changes it.
 
-### Adding games (the same everywhere)
+## Contents
 
-Put each game in **its own folder** inside the games folder, with its installer in
-it. That's all: no config file, no registering anything.
+- [Features](#features)
+- [Quick start](#quick-start)
+- [Adding games](#adding-games)
+- [Server install](#server-install)
+  - [Option A: Windows app](#option-a-windows-app)
+  - [Option B: Docker](#option-b-docker)
+  - [Option C: Node](#option-c-node)
+- [Client install](#client-install)
+- [Using the launcher](#using-the-launcher)
+- [Optional per-game settings](#optional-per-game-settings-gamejson)
+- [How installing works](#how-installing-works)
+- [Troubleshooting](#troubleshooting)
+- [Known limitations](#known-limitations)
+
+## Features
+
+**Library and installing**
+
+- One **Install** button per game. It downloads (resuming a partial download), checks the files, installs, then deletes the installer files to save space.
+- **GOG offline installers install silently**, with no wizard to click through. Multi-part games (`.exe` + `-1.bin`, `-2.bin`...) work too.
+- Other installer types are handled as well: NSIS installers run silently, and anything else opens its normal window with the destination pre-filled.
+- **Portable games** (a folder that needs no installer) are downloaded as they are and given a Play button.
+- **Download checksums.** The server hashes every file (SHA-256) in the background, and the client rejects any file that doesn't match.
+- Download and install **sizes** shown up front, a **free space** check on each drive, and live download speed and time remaining.
+- Finds where the game was installed automatically, creates a **desktop shortcut**, and has **Open install folder**, **Run as administrator** and **Uninstall** in each game's menu.
+
+**DLC**
+
+- DLC is detected from installer file names or from a `DLC` / `Add-ons` / `Expansions` / `Bonus` folder.
+- Each DLC gets its own page with a thumbnail, description and **Install** button, and installs into the base game's folder.
+- DLC names and pictures come from Steam when it can match them, and the base game's title is trimmed off the front.
+
+**Game pages and artwork**
+
+- Banner, logo, description, genres, developer, release date and screenshots from **Steam's public store** (no account needed) and **SteamGridDB** (free API key).
+- Everything is **saved on the PC**, so pages open instantly and work offline.
+- **Wrong info? Fix match...** lets you pick the right Steam or SteamGridDB entry. Artwork follows your match.
+- **Change cover...** shows the covers SteamGridDB has, or lets you pick a picture from your PC.
+- **Clear metadata** in Settings forgets everything looked up and starts fresh. Your own matches and covers are kept.
+
+**Manuals**
+
+- PDF manuals appear on the game page and open in a built-in viewer. The server picks up PDFs next to the installer and inside folders named `Manuals`, `Docs`, `Extras`, `Bonus`, `Guides` and similar.
+
+**Server**
+
+- Windows app that lives in the system tray, with a status window showing the address to give players.
+- Docker image for TrueNAS, Unraid, Synology or any Docker host (amd64 and arm64).
+- No config files or registration: drop a folder in, press **Refresh** in the launcher.
+
+## Quick start
+
+1. **Server:** install it on the machine that holds your games ([Windows app](#option-a-windows-app) or [Docker](#option-b-docker)).
+2. **Games:** put each game in its own folder inside the games folder ([how](#adding-games)).
+3. **Client:** install the launcher on each PC, open **Settings**, and enter the server address, for example `http://192.168.1.50:5155`.
+4. Press **Refresh**, click a game, click **Install**.
+
+## Adding games
+
+Put each game in **its own folder** inside the games folder, with its installer in it. No config file is needed.
 
 ```
 Game Library/
   Cyberpunk 2077/
     setup_cyberpunk_2077_2.13_(64bit)_(12345).exe
     setup_cyberpunk_2077_2.13_(64bit)_(12345)-1.bin
+    Manuals/
+      cyberpunk_manual.pdf
   Stardew Valley/
     setup_stardew_valley_1.5.6.exe
+  Some Portable Game/
+    Game.exe
+    data/...
 ```
 
-- The name comes from the folder name; the version is read from the installer's file name.
-- The installer that gets run is the `setup_*.exe` with the shortest name (so the base
-  game wins over DLC installers). `patch_*.exe` files are never chosen.
-- **Every** file in a game's folder is downloaded by the launcher (that's how
-  multi-part `.bin` installers work), then the chosen installer is run.
-- A game you add shows up the next time a player presses **Refresh** in the launcher.
-- The server only ever *reads* this folder.
+- The game's name comes from the folder name, and the version from the installer's file name.
+- The installer that runs is the `setup_*.exe` with the shortest name, so the base game wins over DLC installers. `patch_*.exe` files are never chosen.
+- Every file in the folder is downloaded (that's how multi-part `.bin` installers work), except DLC and manuals, which are listed separately.
+- New games appear the next time a player presses **Refresh**.
+- Each game must be in a top-level folder. Loose installers in the root are not scanned.
 
-### A. Windows app (the easy way)
+**DLC** can sit in the same folder (a `setup_*` installer whose name starts with the base game's name plus a word, such as `setup_a_hat_in_time_-_seal_the_deal_...exe`) or in a subfolder named `DLC`, `DLCs`, `Add-ons`, `Expansions` or `Bonus`.
 
-For a Windows PC that has your games. **Game Launcher Server** is an installer like
-any other program. Run it and it's working: it makes a `Documents\Game Library`
-folder, starts serving it, and shows the address to give players.
+## Server install
 
-- **The window** shows the address(es) to paste into the launcher's Server URL (one
-  per network connection, each labelled, with a Copy button), your games folder
-  (Change… / Open folder), the port, the games it found, and what's being downloaded.
-- **Closing the window keeps it running** in the system tray, so players can keep
-  downloading. Right-click the tray icon to quit.
-- **Start with Windows** (a checkbox) starts it silently in the tray when you log in.
-- The first time it runs, **Windows Firewall** asks whether to let it through: allow it
-  on **private networks**, or other PCs can't reach it. (There's a "Players can't
-  connect?" section in the window with the other usual causes.)
+Pick whichever fits where your games live. All three serve the same way, and the launcher can't tell them apart.
 
-To build the installer (on Windows):
+### Option A: Windows app
+
+The easy way, for a Windows PC that has your games.
+
+1. Run **Game Launcher Server Setup** (build it yourself, see below).
+2. It creates `Documents\Game Library`, starts serving it, and shows the address to give players.
+3. The first time it runs, **Windows Firewall** asks whether to allow it. Allow it on **private networks**, or other PCs can't connect.
+
+In the window you can copy the address, change or open the games folder, and see the games found and current downloads. Closing the window keeps the server running in the system tray. Tick **Start with Windows** to launch it at login.
+
+To build the installer (on Windows, with [Node.js](https://nodejs.org) 20 or newer):
 
 ```
 cd server
 npm install
-npm run dist          # -> server/dist/Game Launcher Server Setup 1.1.0.exe
+npm run dist
 ```
 
-(`npm run app` runs it without building, for testing.)
+The installer is written to `server/dist/`. Use `npm run app` to run it without building.
 
-### Branding and icons
+### Option B: Docker
 
-The logo's master files are vector (`branding/icon.svg`, plus `icon-small.svg`, a bolder cut
-used at 32 px and below so it stays legible in the tray and title bar, and `icon-square.svg`
-for avatars). `branding/game-launcher-icon-2048.png` and `game-launcher-icon-square-2048.png`
-are ready-made high-resolution versions. Every icon in the apps (`client/assets/icon.ico`,
-`server/app/assets/icon.ico`, and the logos in both windows) is generated from those files, so
-they can't drift apart. To change the artwork, edit the SVGs and run
-`npm i --no-save sharp && node branding/make-icons.js`.
+For TrueNAS, Unraid, Synology, a NAS, a Raspberry Pi or any Docker host. The container runs as a normal user and mounts your games **read-only**.
 
-### B. Docker (TrueNAS and other servers)
+**1. Get the image.** Either pull a published one or build it yourself.
 
-The image is built from `server/Dockerfile` and runs as a normal user (it never
-writes anything). Mount your games folder at **`/games`**, read-only, and publish
-port 5155:
+Pull (replace `YOUR-NAME` with the GitHub user that published it, lowercase):
+
+```
+docker pull ghcr.io/YOUR-NAME/game-launcher-server:latest
+```
+
+Or build from this repository:
+
+```
+docker build -t game-launcher-server server/
+```
+
+**2. Run it.** Change `/path/to/your/games` to the folder that holds your games.
 
 ```
 docker run -d --name game-launcher-server --restart unless-stopped \
-  -p 5155:5155 -v /path/to/your/games:/games:ro \
+  -p 5155:5155 \
+  -v /path/to/your/games:/games:ro \
   ghcr.io/YOUR-NAME/game-launcher-server:latest
 ```
 
-or with Compose (`server/docker-compose.yml` is ready to edit):
+If you built it yourself, use `game-launcher-server` as the image name on the last line.
+
+**Or use Docker Compose.** Edit `server/docker-compose.yml`: set the image (or uncomment `build: .`) and put your games path on the left of the volume line, then run:
 
 ```
+cd server
 docker compose up -d
 ```
 
-Players then use `http://<the server's address>:5155`. Open that address in a browser
-to check: it shows a status page with exactly what to give players and the games found.
+```yaml
+services:
+  game-launcher-server:
+    image: ghcr.io/YOUR-NAME/game-launcher-server:latest
+    container_name: game-launcher-server
+    restart: unless-stopped
+    ports:
+      - "5155:5155"
+    volumes:
+      - /path/to/your/games:/games:ro
+```
 
-**Getting the image.** Either build it yourself (`docker build -t game-launcher-server server/`),
-or publish it once so any server can pull it: push this project to GitHub, then
-`git tag server-v1.1.0 && git push --tags` runs `.github/workflows/docker-publish.yml`, which
-builds for normal servers (amd64) and ARM ones like a Raspberry Pi (arm64) and puts the
-image in GitHub's registry. In the repository's *Packages* settings, make it **Public** so
-other people's servers can pull it. Replace `YOUR-NAME` above with your GitHub user name
-(lowercase).
+**3. Check it works.** Open `http://<server address>:5155` in a browser. The status page shows the games found and exactly what to give players. Players enter that same address in the launcher.
 
-**TrueNAS SCALE** (24.10 or newer, where apps are Docker containers): *Apps → Discover Apps →
-Custom App → Install via YAML* (the wording varies a little between versions) and paste the
-contents of `docker-compose.yml`, with your dataset's path on the left of the volume
-line (e.g. `/mnt/tank/games:/games:ro`). The container has to be able to *read* that
-dataset: set `user: "568:568"` (TrueNAS's built-in `apps` user) and give that user read
-access in the dataset's permissions. If the server starts but finds no games, this is almost
-always why: the log says `No games found. Is your games folder mounted at /games?`.
+**Settings (environment variables, all optional)**
 
-Other settings, if you need them (environment variables): `PORT` (inside the container;
-easier to change the published port instead), `LIBRARY_ROOT` (default `/games`).
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `LIBRARY_ROOT` | `/games` | Where the container looks for games |
+| `PORT` | `5155` | Port inside the container (easier to change the published port instead) |
 
-### C. From Node (development, or a Linux box without Docker)
+**Useful commands**
+
+```
+docker logs game-launcher-server          # see what it found
+docker restart game-launcher-server       # after changing settings
+docker pull ghcr.io/YOUR-NAME/game-launcher-server:latest   # update, then re-create the container
+```
+
+**TrueNAS SCALE** (24.10 or newer): go to *Apps → Discover Apps → Custom App → Install via YAML* (wording varies by version) and paste the compose file above, with your dataset path on the left of the volume line, for example `/mnt/tank/games:/games:ro`. The container must be able to read that dataset: add `user: "568:568"` (TrueNAS's built-in `apps` user) to the service and give that user read access in the dataset permissions. If the server starts but finds no games, this is almost always the cause. The log says `No games found. Is your games folder mounted at /games?`.
+
+**Publishing your own image.** Push this project to GitHub, then run `git tag server-v1.1.0 && git push --tags`. The workflow in `.github/workflows/docker-publish.yml` builds for amd64 and arm64 and publishes to GitHub's container registry. In the repository's *Packages* settings, set the image to **Public** so other servers can pull it.
+
+### Option C: Node
+
+For development, or a Linux box without Docker. Needs [Node.js](https://nodejs.org) 20 or newer.
 
 ```
 cd server
 npm install
-LIBRARY_ROOT=/path/to/games npm start       # Windows: set LIBRARY_ROOT=D:\Games  then  npm start
+LIBRARY_ROOT=/path/to/games npm start
 ```
 
-Prints the addresses to use. Settings: `PORT` (default 5155), `HOST` (default every
-address), `LIBRARY_ROOT` (default `./library`).
+On Windows use `set LIBRARY_ROOT=D:\Games` and then `npm start`. It prints the addresses to use. Settings: `PORT` (default 5155), `HOST` (default every address), `LIBRARY_ROOT` (default `./library`).
 
-### Upgrading from the old `server.js`
+## Client install
 
-The server folder is reorganised: the code is now in `server/src/`. Delete the old
-`server/server.js`, `server/scanner.js` and `server/package-lock.json`. Your games
-don't have to move: point the Windows app or `LIBRARY_ROOT` at wherever they already are.
+The client is a Windows desktop app built with Electron.
 
-### Per-game extras
+**One-time step before your first build.** The app bundles `innoextract` and `unrar` so players never install anything separately. Follow `client/tools/README.txt` to get them. Do **not** take innoextract from the official GitHub releases page: its Windows build has a bug with multi-part GOG installers, and the README explains how to get a working build instead. You only do this once.
 
-An optional `game.json` in a game's folder can override details (see
-`server/library/README.txt`). Players don't need it: they can fix a game's info from
-inside the launcher.
-
-## Client
-
-**One-time setup step before your first build:** this app bundles
-`innoextract` and `unrar` (see below for why) so end users never have to
-install anything separately. Follow `client/tools/README.txt` to obtain
-them — **not** from the official innoextract GitHub releases page, which
-has a confirmed bug on Windows for multi-part GOG installers; the README
-walks through getting a working build via MSYS2 instead, as a one-time
-step on your own machine. Do this once — every `npm start` and
-`npm run dist` after that picks it up automatically.
+Then:
 
 ```
 cd client
 npm install
 npm start          # run it
-npm run dist       # build a Windows installer into client/dist/ -- innoextract ships inside it
+npm run dist       # build a Windows installer into client/dist/
 ```
 
-In **Settings** set the Server URL (e.g. `http://192.168.1.50:5155`), an optional
-SteamGridDB API key (https://www.steamgriddb.com/profile/preferences/api) for
-cover art, and the install folder. Trailing slashes and a missing `http://`
-are handled automatically. The innoextract field can stay blank — it's an
-override for using a different copy than the bundled one, not something
-end users need to fill in.
+Open **Settings** and fill in:
 
-## How installing actually works (important)
+| Setting | What to enter |
+| --- | --- |
+| **Server URL** | The server's address, for example `http://192.168.1.50:5155`. A missing `http://` or trailing slash is fixed for you. |
+| **SteamGridDB API key** | Optional, for covers, banners and logos. Get one free at [steamgriddb.com/profile/preferences/api](https://www.steamgriddb.com/profile/preferences/api). |
+| **Install folder** | Where games are installed. |
 
-GOG's offline installers are Inno Setup executables, but the screen you see
-when you double-click one — the slideshow background, the "INSTALL" /
-"MD5 CHECK" buttons — is a **custom Pascal-scripted page**, not Inno
-Setup's normal wizard. Inno's own `/SILENT`/`/VERYSILENT` automation works
-by simulating a click on the standard wizard's Next button; it has no way
-to trigger GOG's custom button logic, so on this custom page the installer
-detects that nothing happened and deliberately aborts
-(`Failed to proceed to next wizard page; aborting`). No command-line flag
-combination fixes this — it's baked into the installer itself.
+Leave the innoextract field blank unless you want to use a different copy than the bundled one.
 
-This is exactly why other self-hosted/open-source GOG library tools
-(Heroic Games Launcher, Lutris, minigalaxy) don't run the installer's
-wizard either — they extract the installer archive directly instead, using
-[**innoextract**](https://github.com/dscharrer/innoextract), an open-source
-(zlib-licensed) tool built for exactly this. This client does the same
-thing, with its own bundled copy — see the one-time setup step above.
+## Using the launcher
 
-**Larger, multi-part games need two more pieces, both bundled.** Bigger
-games are split into GOG Galaxy-format parts (`setup_game.exe` + `-1.bin`,
-`-2.bin`, ...). Reassembling those needs:
+- **Install.** Downloads the game, checks it, installs it, and cleans up the installer files. If it fails, the files are kept so a retry doesn't download everything again. **Clear downloads** in Settings removes leftovers.
+- **Game page.** Click a game for artwork, description, screenshots, sizes, DLC and manuals. If the info is wrong, use **Wrong info? Fix match...**.
+- **Missing games.** If a game's files have been deleted or the drive is unplugged, the card shows "Game files not found" with an Install button. If the files come back, it shows as installed again after a refresh.
+- **Menu (⋮).** Open install folder, create desktop shortcut, run as administrator, uninstall. Uninstall only deletes inside your install folder and removes shortcuts that point at the game.
+- **Metadata.** Info and art are kept on the PC permanently. **Refresh info** on a game page updates one game, and **Clear metadata** in Settings starts over for all of them.
 
-1. A working `innoextract` build. The **official Windows release has a
-   confirmed bug** here — it fails with `unable to create .r?? symlinks`
-   regardless of admin rights or Developer Mode (both were tested directly
-   against this; neither fixed it). A build pulled from MSYS2 (which
-   tracks the project's ongoing git history rather than the stale 2020
-   GitHub release) doesn't have this bug. `client/tools/README.txt` walks
-   through getting this build.
-2. `unrar`, which innoextract shells out to for the actual RAR-format
-   decompression. Also bundled the same way.
+## Optional per-game settings (`game.json`)
 
-Small single-file installers never needed either of these and work
-regardless. If, for some reason, extraction still fails on a given
-machine (missing or mismatched DLLs, a future installer format change),
-the app automatically falls back to running the real GOG installer with
-its normal window visible instead, with the destination folder already
-filled in — you'd see it pop up partway through install and just need to
-click through it once (Next → Accept the EULA → Install → Finish).
-Detection of the installed game, the desktop shortcut, and the library
-status afterward are all still fully automatic either way.
-
-After extraction (or the fallback install), the app reads the
-`goggame-<id>.info` file GOG bundles into the archive, which names the
-exact primary executable — that becomes the Play target. If that file
-isn't there (non-GOG installer) it falls back to the largest
-non-uninstaller `.exe`.
-
-If extraction fails outright, the error message includes whatever output
-is available to explain what went wrong.
-
-## Installing, cleanup, and missing games
-
-Each game has a single **Install** button. It downloads the game's files
-(resuming a partial download, skipping files already complete), then starts
-the install straight away with no second click. When the install succeeds,
-the downloaded installer files are deleted to save space. If the install
-fails, they're kept so a retry doesn't have to download everything again.
-Settings → **Clear downloads** removes any leftovers manually.
-
-When the library loads, each installed game's executable is checked on
-disk. If it's gone (deleted by hand, or on a drive that's unplugged), the
-card shows "Game files not found" with an **Install** button instead of
-Play. The saved state isn't wiped, so if the files come back, the game
-shows as installed again after a refresh. Reinstalling replaces the old
-desktop shortcut instead of making a duplicate.
-
-## Installers that aren't Inno Setup
-
-innoextract only reads Inno Setup installers. For anything else it reports
-"Not a supported Inno Setup installer", and the app runs the installer itself.
-
-**NSIS installers (a very common kind) run silently by default.** The app
-recognizes them from their signature and runs them with NSIS's standard `/S`
-switch plus the destination folder, so there's nothing to click: you'll see
-Windows' admin prompt if the installer asks for one, then an animated bar with
-the elapsed time and how much data has been written so far (unpacking and
-runtime installs can take several minutes). There's no percentage, because a
-silent installer doesn't report one and the total size isn't known in advance. If a silent run reports a failure, the app reopens the
-installer normally so you can finish it, and if you cancel that too you get a
-clear message. Note that silent mode skips the installer's license screens.
-
-**Other kinds** (InstallShield, MSI, custom installers...) have no switch that's
-safe to guess, so they open normally for you to click through. For NSIS and Inno
-installers the destination is pre-filled with your install folder.
-
-Per-game overrides go in a `game.json` next to the installer on the server:
-- `{ "silent": false }` — never auto-run this NSIS installer silently; always
-  show its window.
-- `{ "installArgs": "/quiet" }` — run this installer with these switches instead
-  (works for any installer type, and replaces the default `/S`). The destination
-  folder is added for you where the installer type supports it.
-
-If an installer needs a separate data file, keep it in the same server folder as
-the installer.
-
-If a silent install seems stuck, look for an installer window that's waiting for
-you; if there isn't one, end the installer in Task Manager and set
-`"silent": false` for that game.
-
-Finding where the game went is automatic where possible: the app compares
-Windows' installed-programs list before and after the install, and the new
-entry normally gives the game's folder and often its exe. Redistributables
-(Visual C++, DirectX, .NET...) are ignored. If nothing can be worked out, you're
-asked to select the game's `.exe`, and that's used to launch it.
-
-## The library, game pages, and sizes
-
-**Sizes.** Every game shows what it will download and what it will take on disk.
-The download size is exact (the total of the game's files on the server). The
-installed size isn't known until a game is installed, so until then it's an
-estimate, marked with **≈**: roughly 1.3× the download, a rule of thumb that can be
-well off for some games. It becomes exact in either of two ways: after the game has
-been installed once on this PC (the real size is remembered, even after an
-uninstall), or when you set `installSizeGB` for the game on the server.
-
-**Free space.** Before installing, the app checks there's room. Downloads go to the
-app's data folder and games to your install folder, which can be different drives,
-so each drive is checked for what it needs. If one is short you're told which and
-asked whether to continue.
-
-**Download speed.** While downloading, the status shows how much has arrived, the
-speed in MB/s, and the time remaining.
-
-**Game pages.** Click a game to open its page: banner and logo art, a description,
-genres, developer, release date, screenshots (click one to enlarge) and its storage
-details. The text and screenshots come from Steam's public store (no account or key
-needed, but it needs internet access); the covers, banners and logos come from
-SteamGridDB (needs the API key in Settings).
-
-**Saved for good.** Once a game's info and art have been found, they're kept on the PC
-permanently: the page opens instantly and works with no internet. Nothing expires.
-(A search that found nothing is tried again after a day, since a store listing can
-appear later.) To update a game's info, use **Refresh info** on its page: if that can't
-reach the internet, what's already saved is left untouched.
-
-**Fixing a wrong match, inside the app.** The game page has **Wrong info? Fix match…**.
-It searches Steam (description, genres, screenshots) and SteamGridDB (cover, banner,
-logo) by name, shows the candidates, and you click the right one. There are two
-extra choices for each: *this game isn't on Steam: show no Steam info* / *use no
-artwork*, and *back to automatic*. The choice is remembered on that PC, applies at
-once (the cover on the library card updates too), and never involves editing a file.
-When Steam matched a title different from the game's name, the page says so with a
-**Not right?** button. A game with no info at all offers **Find the right game…**.
-
-Automatic matching is deliberately conservative: a title that only partly matches (a
-sequel, a soundtrack, a different subtitle) is rejected rather than showing another
-game's description.
-
-**For whoever runs the server only** (players never need this): a `game.json` in a
-game's folder can supply the details up front, which is handy for a game no store knows
-(a mod, a small release) and saves each player from fixing it by hand. All of it is
-optional, and a player's own choice in the app beats it:
+A `game.json` in a game's folder on the server can override details. Players don't need it, since they can fix a game from inside the launcher. All fields are optional, and a player's own choice in the app beats them.
 
 ```json
 {
@@ -322,70 +243,75 @@ optional, and a player's own choice in the app beats it:
   "developer": "Studio name",
   "publisher": "Publisher name",
   "genres": ["Action", "Horror"],
-  "releaseDate": "2008"
+  "releaseDate": "2008",
+  "installer": "setup_special.exe",
+  "silent": false,
+  "installArgs": "/quiet",
+  "portable": true,
+  "playExe": "Game.exe"
 }
 ```
 
-## Messages and errors
+- `installer` picks which file is the installer.
+- `silent: false` stops an NSIS installer running silently.
+- `installArgs` runs the installer with your own switches instead of the default `/S`.
+- `portable` and `playExe` force the portable-game detection and the program that starts.
+- `installSizeGB` makes the installed size exact before anyone has installed the game.
 
-Status lines are short plain sentences (a card never shows more than two lines; hover
-for the rest) and don't use installer jargon. When something fails, the dialog shows
-one sentence saying what happened and what to try. The technical text, including the
-list of files that failed (grouped by cause, since a game with many data files used
-to print one long line per file), is behind a collapsed **Technical details** section
-with a **Copy** button, so it's there for a support request but out of the way.
+More details are in `server/library/README.txt`.
 
-## Desktop shortcuts and uninstalling
+## How installing works
 
-A desktop shortcut is created automatically right after a game installs
-(pointing at the detected executable, with its working directory set
-correctly). If a shortcut creation fails for some reason, it's logged but
-doesn't fail the install itself.
+<details>
+<summary>Why GOG installers are extracted instead of run</summary>
 
-Every installed game gets a **⋮** menu next to its title in the library
-with:
-- **Open install folder** — jumps straight to where the game lives on disk.
-- **Create desktop shortcut** — recreates it, e.g. if you deleted it by
-  hand and want it back.
-- **Uninstall** — deletes the installed files and the game's desktop shortcuts.
-  Installer files are already deleted after install, so reinstalling means
-  downloading the game again. It only deletes inside your install folder: a
-  game that its own installer put somewhere else (e.g. Program Files) is
-  removed from the library but its files are left alone, with a message saying
-  where they are.
+GOG's offline installers are Inno Setup executables, but the screen you see when you double-click one (the slideshow background, the "INSTALL" button) is a custom page, not Inno's normal wizard. Inno's `/SILENT` switches work by clicking the standard Next button, so on this custom page the installer notices nothing happened and aborts. No command-line flag fixes that.
 
-**What "the game's desktop shortcuts" covers.** The one the launcher made, and also
-any other shortcut on your desktop (or the shared Public desktop) that points at the
-game, such as the one a game's own installer adds. When the game's folder is deleted,
-that includes shortcuts to anything inside it (an installer's "Uninstall" link). A
-shortcut to anything else is never touched, and when a game's files are *left* on disk
-only shortcuts that run the game itself are removed. If a game's files can't all be
-deleted (it's still running, say), nothing is removed: you're told to close it and try
-again, and the game and its shortcuts stay as they were. Start Menu entries made by an
-installer, and the entry in Windows' "Apps" list, are not touched.
+Other open-source GOG tools (Heroic, Lutris, minigalaxy) extract the archive directly with [innoextract](https://github.com/dscharrer/innoextract), and so does this client, using its own bundled copy.
+
+Larger games are split into GOG Galaxy parts (`setup_game.exe` plus `-1.bin`, `-2.bin`...), which need a working innoextract build and `unrar`. Both ship inside the built app. If extraction still fails on a machine, the app falls back to running the real GOG installer with its window visible and the destination already filled in. You click through it once and the rest stays automatic.
+
+After extraction the app reads the `goggame-<id>.info` file inside the archive, which names the game's main program. That becomes the Play target. Without it, the largest non-uninstaller `.exe` is used.
+
+</details>
+
+<details>
+<summary>Installers that aren't Inno Setup</summary>
+
+- **NSIS** installers are recognised by signature and run silently with `/S` plus the destination. You'll see Windows' admin prompt if needed, then a progress bar with elapsed time and data written. If a silent run fails, the installer reopens normally so you can finish it. Silent mode skips license screens.
+- **Everything else** (InstallShield, MSI, custom installers) opens normally to click through, because there is no safe switch to guess.
+- The game's folder is found by comparing Windows' installed-programs list before and after. Redistributables such as Visual C++, DirectX and .NET are ignored. If nothing is found you're asked to pick the game's `.exe`.
+- If a silent install seems stuck, look for an installer window waiting for you. If there isn't one, end the installer in Task Manager and set `"silent": false` for that game.
+
+</details>
+
+## Troubleshooting
+
+| Problem | Try this |
+| --- | --- |
+| Players can't connect to the Windows server | Allow it through Windows Firewall on **private** networks. The server window has a "Players can't connect?" section. |
+| Docker server finds no games | Check the volume maps to `/games`, and that the container's user can read the folder (on TrueNAS, `user: "568:568"`). |
+| New game missing | Press **Refresh** in the launcher. Each game needs its own top-level folder. |
+| Changes to the server don't show | Restart the server (or rebuild/re-create the container). Client changes need a client restart. |
+| A game has the wrong description or art | Open its page and use **Wrong info? Fix match...**. |
+| Info looks stale or wrong everywhere | Settings → **Clear metadata**. |
+| Install says it failed | Open **Technical details** in the message and use **Copy** if you need to report it. The downloaded files are kept for a retry. |
+| Extraction errors on multi-part games | Check the bundled tools came from `client/tools/README.txt`, not the official innoextract release. |
 
 ## Known limitations
 
-- Only NSIS installers run silently by default. Other non-Inno installers open
-  their normal window (there's no safe silent switch to guess), and for all of
-  them, finding the game afterward depends on the installer registering itself
-  with Windows or you picking the exe. A silent install that hangs on a hidden
-  prompt can't be cancelled from inside the app, since installers that need
-  admin rights run elevated; end it in Task Manager.
-- Only the first (best-ranked) installer runs; DLC installers in the same folder
-  are downloaded but not run automatically yet.
-- The fallback executable heuristic can guess wrong; there's no manual "set play
-  target" UI yet.
-- No checksum verification and no authentication — fine on a trusted LAN only.
-- Games must be in their own top-level folder; loose installers directly in the
-  library root and nested subfolders are not scanned.
-- Uninstall deletes the whole install folder; any save files a game stores
-  inside its own install directory (rather than in `%APPDATA%` or similar)
-  would go with it.
-- innoextract, its runtime DLLs, and unrar all ship bundled in the built
-  app, but you (the developer) need to gather them into `client/tools/`
-  once before your first build — see `client/tools/README.txt`. A future
-  Windows update to innoextract's official release may fix the underlying
-  bug, at which point this MSYS2-sourcing step could be simplified away.
+- Only NSIS installers run silently. Other non-Inno installers open their window, and finding the game afterwards depends on the installer registering itself with Windows or you picking the `.exe`.
+- A silent install that hangs on a hidden prompt can't be cancelled from the app, because installers that need admin rights run elevated. End it in Task Manager.
+- DLC installs only work for Inno Setup and GOG installers, and only after the base game is installed.
+- The fallback "which exe starts the game" heuristic can guess wrong, and there is no manual "set play target" option yet.
+- Matching to Steam depends on Steam's search and store API. A few DLC aren't separate Steam pages, so they keep a tidied file name until you use Fix match.
+- There is no authentication, which is fine on a trusted home network only.
+- Uninstall deletes the whole install folder, so save files a game keeps inside its own folder go with it.
+- Some old games with copy protection (for example Sonic Riders' disc copy) may still show their own popups.
+- Build step for developers: innoextract, its DLLs and unrar must be gathered into `client/tools/` once before your first build.
+
+## Branding
+
+Logo masters are vector files in `branding/` (`icon.svg`, `icon-small.svg` for 32 px and below, `icon-square.svg`). The icons in both apps are generated from them. To change the artwork, edit the SVGs and run `npm i --no-save sharp && node branding/make-icons.js`.
 
 If you would like to support me and what I do please consider donating to my Ko-Fi: https://ko-fi.com/frostygraybob 
