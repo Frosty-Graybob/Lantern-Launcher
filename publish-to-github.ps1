@@ -136,6 +136,13 @@ if ($LASTEXITCODE -ne 0) {
   Write-Host "Merging them in, keeping your local files where they overlap, then pushing again..." -ForegroundColor Yellow
   & git pull --rebase -X theirs origin $Branch
   if ($LASTEXITCODE -ne 0) {
+    # A file that was changed here but deleted on GitHub (or the reverse) can't be merged automatically.
+    # Your local copy is the one you want to publish, so keep it and carry on.
+    Write-Host "`nKeeping your local version of the conflicting files and continuing..." -ForegroundColor Yellow
+    & git add -A
+    & git -c core.editor=true rebase --continue
+  }
+  if ($LASTEXITCODE -ne 0) {
     & git rebase --abort 2>$null
     Write-Host "`nThe automatic merge didn't work, and nothing was changed. Run these by hand to see why:" -ForegroundColor Red
     Write-Host "  git pull --rebase origin $Branch" -ForegroundColor Red
