@@ -132,13 +132,21 @@ if ($changes) {
 Step "Push to $Remote"
 & git push -u origin $Branch
 if ($LASTEXITCODE -ne 0) {
-  Write-Host "`nThe push was rejected. This usually means the GitHub repository has commits you don't have here" -ForegroundColor Yellow
-  Write-Host "(for example a README created on the website). To merge them in and try again, run:" -ForegroundColor Yellow
-  Write-Host "  git pull --rebase origin $Branch" -ForegroundColor Yellow
-  Write-Host "  git push -u origin $Branch" -ForegroundColor Yellow
-  Write-Host "If GitHub asks you to sign in, use your GitHub username and a personal access token as the password" -ForegroundColor Yellow
-  Write-Host "(https://github.com/settings/tokens), or sign in through the browser window if one opens." -ForegroundColor Yellow
-  exit 1
+  Write-Host "`nGitHub has commits that aren't here yet (often a README created on the website)." -ForegroundColor Yellow
+  Write-Host "Merging them in, keeping your local files where they overlap, then pushing again..." -ForegroundColor Yellow
+  & git pull --rebase -X theirs origin $Branch
+  if ($LASTEXITCODE -ne 0) {
+    & git rebase --abort 2>$null
+    Write-Host "`nThe automatic merge didn't work, and nothing was changed. Run these by hand to see why:" -ForegroundColor Red
+    Write-Host "  git pull --rebase origin $Branch" -ForegroundColor Red
+    exit 1
+  }
+  & git push -u origin $Branch
+  if ($LASTEXITCODE -ne 0) {
+    Write-Host "`nStill rejected. If GitHub asked you to sign in, use your GitHub username and a personal access token" -ForegroundColor Red
+    Write-Host "as the password (https://github.com/settings/tokens), or sign in through the browser window if one opens." -ForegroundColor Red
+    exit 1
+  }
 }
 
 Write-Host "`nDone. https://github.com/Frosty-Graybob/Lantern-Launcher" -ForegroundColor Green
