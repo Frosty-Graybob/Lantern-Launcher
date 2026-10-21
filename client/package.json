@@ -1,0 +1,42 @@
+{
+  "name": "game-launcher-client",
+  "version": "1.0.0",
+  "description": "Self-hosted Steam-replacement game launcher client",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "build": {
+    "appId": "com.local.gamelauncher",
+    "productName": "Game Launcher",
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    },
+    "files": [
+      "**/*",
+      "!node_modules/electron-builder",
+      "!tools/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "assets",
+        "to": "assets"
+      },
+      {
+        "from": "tools",
+        "to": "tools",
+        "filter": [
+          "**/*",
+          "!README.txt",
+          "!.gitignore"
+        ]
+      }
+    ]
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  }
+}

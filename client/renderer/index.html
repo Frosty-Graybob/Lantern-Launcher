@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; img-src 'self' file: data: https:; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Game Launcher</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img class="brand-mark" src="icon.png" width="28" height="28" alt="" />
+      <span class="brand-name">Game Launcher</span>
+    </div>
+
+    <label class="search">
+      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <input id="search" type="search" placeholder="Search your library" autocomplete="off" spellcheck="false" />
+    </label>
+
+    <nav class="filters" id="filters" aria-label="Filter games">
+      <button type="button" data-filter="all" class="active">All</button>
+      <button type="button" data-filter="installed">Installed</button>
+      <button type="button" data-filter="available">Not installed</button>
+    </nav>
+
+    <div class="topbar-actions">
+      <button id="refreshBtn" class="icon-btn" type="button" title="Refresh library" aria-label="Refresh library">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M20 11a8 8 0 10-2.3 5.7"/><path d="M20 4v7h-7"/></svg>
+      </button>
+      <button id="settingsBtn" class="icon-btn" type="button" title="Settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <div class="library-meta" id="libraryMeta"></div>
+    <div id="library" class="grid"></div>
+  </main>
+
+  <!-- Game page -->
+  <div id="detailsOverlay" class="overlay hidden">
+    <div id="details" class="details" role="dialog" aria-modal="true" aria-label="Game details"></div>
+  </div>
+
+  <!-- Screenshot viewer -->
+  <div id="lightbox" class="lightbox hidden">
+    <img alt="Screenshot" />
+  </div>
+
+  <div id="settingsModal" class="modal hidden">
+    <div class="modal-content">
+      <h2>Settings</h2>
+      <label>Server URL
+        <input id="serverUrl" type="text" placeholder="http://192.168.1.50:5155" />
+      </label>
+      <label>SteamGridDB API key
+        <input id="steamGridDbApiKey" type="text" placeholder="optional, for cover and banner art" />
+      </label>
+      <details class="advanced">
+        <summary>Advanced</summary>
+        <label>Unpacker program (innoextract.exe)
+          <input id="innoExtractPath" type="text" placeholder="leave blank to use the one that came with the launcher" />
+          <span id="innoExtractStatus" class="hint"></span>
+        </label>
+      </details>
+      <label>Install location
+        <div class="row">
+          <input id="installRoot" type="text" readonly />
+          <button id="chooseInstallRoot" class="btn">Browse…</button>
+        </div>
+      </label>
+      <label>Downloaded installer files
+        <div class="row">
+          <button id="openDownloads" class="btn">Open folder</button>
+          <button id="clearDownloads" class="btn">Clear downloads</button>
+        </div>
+      </label>
+      <label>Metadata from Steam and SteamGridDB
+        <div class="row">
+          <button id="clearMetadata" class="btn">Clear metadata</button>
+        </div>
+      </label>
+      <div class="row row-end">
+        <button id="closeSettings" class="btn">Cancel</button>
+        <button id="saveSettings" class="btn btn-primary">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="matchModal" class="modal hidden">
+    <div class="modal-content match" role="dialog" aria-modal="true" aria-labelledby="matchTitle">
+      <h2 id="matchTitle">Fix this game's info</h2>
+      <p class="muted">Search for the right game and pick it. Your choice is remembered.</p>
+      <div class="tabs" id="matchTabs" role="tablist">
+        <button type="button" role="tab" data-source="steam" class="active">Description &amp; screenshots</button>
+        <button type="button" role="tab" data-source="steamgriddb">Cover &amp; banner art</button>
+      </div>
+      <form id="matchForm" class="match-search" autocomplete="off">
+        <input id="matchTerm" type="search" placeholder="Game name" spellcheck="false" />
+        <button type="submit" class="btn">Search</button>
+      </form>
+      <div id="matchStatus" class="match-status" aria-live="polite"></div>
+      <ul id="matchResults" class="match-results"></ul>
+      <div class="match-footer">
+        <div class="match-links">
+          <button type="button" id="matchNone" class="link-btn"></button>
+          <button type="button" id="matchAuto" class="link-btn">Back to automatic</button>
+        </div>
+        <button type="button" id="matchClose" class="btn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="artModal" class="modal hidden">
+    <div class="modal-content art" role="dialog" aria-modal="true" aria-labelledby="artTitle">
+      <h2 id="artTitle">Choose a cover</h2>
+      <p class="muted">Covers from SteamGridDB. Click one to use it.</p>
+      <div id="artStatus" class="match-status" aria-live="polite"></div>
+      <div id="artGrid" class="art-grid"></div>
+      <div class="match-footer">
+        <button type="button" id="artFile" class="link-btn">Use a picture from this PC…</button>
+        <button type="button" id="artClose" class="btn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="errorModal" class="modal hidden">
+    <div class="modal-content">
+      <h2 id="errorTitle">Something went wrong</h2>
+      <p id="errorSummary" class="error-summary"></p>
+      <details id="errorDetails" class="error-details hidden">
+        <summary>Technical details</summary>
+        <pre id="errorText" class="error-text"></pre>
+        <button id="copyError" class="btn" type="button">Copy</button>
+      </details>
+      <div class="row row-end">
+        <button id="closeError" class="btn btn-primary">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

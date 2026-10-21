@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' file: data:; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Game Launcher Server</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <img class="brand-icon" src="../assets/icon.png" alt="" />
+      <div>
+        <h1>Game Launcher Server</h1>
+        <p class="sub" id="version"></p>
+      </div>
+    </div>
+    <div id="pill" class="pill" role="status">Starting…</div>
+  </header>
+
+  <main>
+    <section class="card hero" id="connectCard">
+      <h2>Players connect to</h2>
+      <div id="addresses" class="addresses"></div>
+      <p class="hint" id="addressHint">In the Game Launcher, open <b>Settings</b> and paste this into <b>Server URL</b>.</p>
+      <div id="errorBox" class="error-box hidden" role="alert"></div>
+    </section>
+
+    <div class="two">
+      <section class="card">
+        <h2>Games folder</h2>
+        <div class="path" id="libraryPath"></div>
+        <p class="warn hidden" id="libraryMissing">This folder can't be found. Is the drive connected?</p>
+        <div class="row">
+          <button class="btn" id="chooseBtn" type="button">Change…</button>
+          <button class="btn" id="openBtn" type="button">Open folder</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Settings</h2>
+        <label class="field">Port
+          <span class="inline">
+            <input id="portInput" type="number" min="1024" max="65535" inputmode="numeric" />
+            <button class="btn" id="portBtn" type="button">Apply</button>
+          </span>
+        </label>
+        <p class="hint hidden" id="portMsg"></p>
+        <label class="check"><input type="checkbox" id="autoStart" /><span>Start with Windows<small class="muted">Opens in the tray, with no window</small></span></label>
+      </section>
+    </div>
+
+    <section class="card">
+      <div class="card-head">
+        <h2 id="gamesTitle">Games</h2>
+        <button class="btn small" id="rescanBtn" type="button">Rescan</button>
+      </div>
+      <ul id="games" class="games"></ul>
+    </section>
+
+    <section class="card">
+      <h2>Activity</h2>
+      <p id="activity" class="activity"></p>
+    </section>
+
+    <details class="card help">
+      <summary>Players can't connect?</summary>
+      <ol>
+        <li>They need to be on the <b>same network</b> as this PC (same router or Wi-Fi). Over the internet needs port forwarding or a VPN, which isn't set up here.</li>
+        <li>The first time the server starts, <b>Windows Firewall</b> asks whether to let it through. It has to be allowed for <b>private networks</b>. If you clicked Cancel, open <i>Windows Security → Firewall &amp; network protection → Allow an app through firewall</i> and tick <i>Game Launcher Server</i>.</li>
+        <li>If this PC lists more than one address above (Wi-Fi, Ethernet, a VPN…), use the one on the players' network, usually the first.</li>
+        <li>Test it: open the address in a web browser on another PC. You should see a page saying the server is running.</li>
+      </ol>
+    </details>
+  </main>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

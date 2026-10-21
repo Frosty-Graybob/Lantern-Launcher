@@ -1,0 +1,21 @@
+# Game Launcher server: run it with   docker compose up -d
+#
+# 1. Change the left side of the volume line to the folder that holds your games
+#    (one folder per game, installer inside).
+# 2. Players then enter  http://<this server's address>:5155  in the launcher.
+
+services:
+  game-launcher-server:
+    # Use the published image...
+    image: ghcr.io/YOUR-NAME/game-launcher-server:latest
+    # ...or build it from this folder instead (comment out `image` above):
+    # build: .
+    container_name: game-launcher-server
+    restart: unless-stopped
+    ports:
+      - "5155:5155"
+    volumes:
+      - /path/to/your/games:/games:ro
+    # TrueNAS SCALE: run as the user that can read your games dataset (the built-in
+    # "apps" user is 568), or the server won't see your files.
+    # user: "568:568"

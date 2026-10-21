@@ -1,0 +1,27 @@
+﻿# dependencies and build output
+node_modules/
+dist/
+build/
+*.log
+
+# your game files and local data: never upload these
+server/library/*
+!server/library/README.txt
+!server/library/.gitkeep
+
+# local backups
+_backup_*/
+*.bak
+
+# the bundled tools are fetched by hand (see client/tools/README.txt)
+client/tools/*.exe
+client/tools/*.dll
+client/tools/*.zip
+client/tools/unrar
+client/tools/UnRAR.exe
+
+# editor and OS files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
